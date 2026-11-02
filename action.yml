@@ -1,0 +1,30 @@
+name: No AI Attribution
+description: Fail pull requests with AI attribution in the description, commit messages or commit authors
+author: Blue Fire
+branding:
+  icon: check-circle
+  color: blue
+inputs:
+  token:
+    description: The token used to read the pull request and its commits
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPOSITORY: ${{ github.repository }}
+      run: |
+        if [ -z "$PR_NUMBER" ]; then
+          echo '::error::no-ai-attribution-action only works on pull request events'
+          exit 1
+        fi
+        pr_url="repos/$REPOSITORY/pulls/$PR_NUMBER"
+        {
+          gh api "$pr_url" --jq '.body // ""'
+          gh api --paginate "$pr_url/commits" \
+            --jq '.[] | "Author: \(.commit.author.name) <\(.commit.author.email)>", .commit.message'
+        } | "$GITHUB_ACTION_PATH/check-ai-attribution.sh"
